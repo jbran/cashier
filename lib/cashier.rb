@@ -145,6 +145,11 @@ module Cashier
     def adapter=(cache_adapter)
       @@adapter = cache_adapter
     end
+
+    def handle_notification(*args)
+      payload = ActiveSupport::Notifications::Event.new(*args).payload
+      Cashier.store_fragment payload[:key], payload[:tag] if payload[:tag]
+    end
 end
 
 require 'rails'
@@ -152,8 +157,14 @@ require 'cashier/railtie'
 require 'cashier/adapters/cache_store'
 require 'cashier/adapters/redis_store'
 
-# Connect cashier up to the low level Rails cache.
+# Connect cashier up to the low level Rails cache: Rails.cache.write("foo")
 ActiveSupport::Notifications.subscribe("cache_write.active_support") do |*args|
-  payload = ActiveSupport::Notifications::Event.new(*args).payload
-  Cashier.store_fragment payload[:key], payload[:tag] if payload[:tag]
+  #payload = ActiveSupport::Notifications::Event.new(*args).payload
+  #Cashier.store_fragment payload[:key], payload[:tag] if payload[:tag]
+  Cashier.handle_notification(*args)
+end
+
+# Connect cashier up to Rails fragment caching: caches_action :show
+ActiveSupport::Notifications.subscribe("write_fragment.action_controller") do |*args|
+  Cashier.handle_notification(*args)
 end
